@@ -1,0 +1,67 @@
+pipeline {
+    agent { label  'java'}
+
+    environment {
+        REPO_DIR = "${env.WORKSPACE}"
+        TF_DIR = "${REPO_DIR}/projectX/argocd"
+        
+    }
+
+    stages {
+        stage('Checkout Repository') {
+            steps {
+                git credentialsId: 'gitlab_connectivity', branch: 'H1', url: 'https://gitlab.stackroute.in/nw-jan-25/h1-sk-repo.git'
+            }
+        }
+    
+        stage('Retrieve SSH Key') {
+            steps {
+                script {
+                    withCredentials([file(credentialsId: 'pv-key', variable: 'SECRET_FILE')]) {
+                        sh "cp ${SECRET_FILE} ${REPO_DIR}/secret-file.pem"
+                        sh "chmod 600 ${REPO_DIR}/secret-file.pem"
+                    }
+                }
+            }
+        }
+       stage('Retrieve SSH Key') {
+        steps {
+            script{
+                sh """ 
+                 kubectl create namespace argocd"""
+                 sh 'helm repo add argo https://argoproj.github.io/argo-helm'
+                 sh 'helm repo update'
+                 sh 'helm install argocd argo/argo-cd --namespace argocd --create-namespace'
+                 sh """kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'"""
+            }
+        }
+       }
+            
+    stage('Install Argocd to console') {
+            steps {
+                script {
+                    //  sh 'chmod 400 ./k8_cluster/10-key.pem'
+                     sh """
+                        ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook --private-key=${REPO_DIR}/secret-file.pem \
+                        ${REPO_DIR}/projectX/argocd/argocd-install.yaml
+                        """
+                
+            }
+            }
+        }
+    
+
+        stage('application deploy') {
+            steps {
+                script {
+                     sh """
+                        ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook --private-key=${REPO_DIR}/secret-file.pem \
+                        ${REPO_DIR}/projectX/argocd/argocd-postgres-deployment.yaml
+                        """
+                }
+            }
+        }
+
+                      
+    }
+}

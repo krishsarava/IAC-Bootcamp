@@ -1,0 +1,21 @@
+pipeline {
+    agent { label  'java'}
+
+    environment {
+        REPO_DIR = "${env.WORKSPACE}"
+                
+    }
+
+    stages {
+        stage('Deploy app') {
+            steps {
+                
+                 sh """ 
+                 kubectl scale deployment python-redis-deploy --replicas=5"""
+
+            }
+        }
+        
+
+    }
+}

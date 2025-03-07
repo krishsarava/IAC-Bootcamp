@@ -1,0 +1,21 @@
+nginx:
+  replicas: 1
+  image: krishsarava/nginx_app:latest
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30100
+
+php:
+  replicas: 1
+  image: krishsarava/php_app:latest
+  service:
+    type: ClusterIP
+    port: 9000
+
+postgres:
+  replicas: 1
+  image: krishsarava/postgres_app:latest
+  service:
+    type: ClusterIP
+    port: 5432

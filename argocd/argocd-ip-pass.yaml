@@ -1,0 +1,65 @@
+---
+- name: Set up ArgoCD
+  hosts: localhost
+  tasks:
+    - name: Ensure ArgoCD is fully initialized before fetching password
+      command: kubectl wait --for=condition=Available deployment -n argocd --timeout=120s argocd-server
+      register: argocd_ready
+      retries: 5
+      delay: 10
+      until: argocd_ready.rc == 0
+      ignore_errors: yes  # Allows playbook to continue even if this check fails
+
+    - name: Get ArgoCD admin password
+      shell: "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode"
+      register: argocd_admin_password
+      changed_when: false  # Prevents Ansible from marking this task as 'changed' unnecessarily
+
+    - name: Check if argocd_admin.ini exists
+      stat:
+        path: "./argocd_admin.ini"
+      register: ini_file_status
+
+    - name: Remove existing argocd_admin.ini file
+      file:
+        path: "./argocd_admin.ini"
+        state: absent
+      when: ini_file_status.stat.exists  # Only delete if the file exists
+
+    - name: Create new ArgoCD admin password file
+      lineinfile:
+        path: "./argocd_admin.ini"
+        line: "admin_password={{ argocd_admin_password.stdout }}"
+        create: yes
+        mode: '0600'
+
+    - name: Display ArgoCD admin password file location
+      debug:
+        msg: "ArgoCD admin password is stored in ./argocd_admin.ini"
+
+    - name: Check if argocd_public_ip.ini exists # for Ip address
+      stat:
+        path: "./public_ip.ini"
+      register: ini_file_status
+
+   # Public IP Address
+    - name: Get public IP of the ArgoCD server
+      shell: "curl -s ifconfig.me"
+      register: public_ip   
+
+    - name: Remove existing ip.ini file
+      file:
+        path: "./public_ip.ini"
+        state: absent
+      when: ini_file_status.stat.exists  # Only delete if the file exists
+
+    - name: Create new ArgoCD IP Address file
+      lineinfile:
+        path: "./public_ip.ini"
+        line: "public_ip={{ public_ip.stdout }}"
+        create: yes
+        mode: '0600'
+
+    - name: Display ArgoCD Public IP address file location
+      debug:
+        msg: "ArgoCD Public IP is stored in ./public_ip.ini"    

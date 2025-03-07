@@ -1,0 +1,42 @@
+pipeline {
+    agent { label  'java'}
+
+    environment {
+        REPO_DIR = "${env.WORKSPACE}"
+                
+    }
+
+    stages {
+        stage('Checkout Repository') {
+            steps {
+                git credentialsId: 'gitlab_connectivity', branch: 'H1', url: 'https://gitlab.stackroute.in/nw-jan-25/h1-sk-repo.git'
+            }
+        }
+
+        stage('Retrieve SSH Key') {
+            steps {
+                script {
+                    withCredentials([file(credentialsId: 'pv-key', variable: 'SECRET_FILE')]) {
+                        sh "cp ${SECRET_FILE} ${REPO_DIR}/secret-file.pem"
+                        sh "chmod 600 ${REPO_DIR}/secret-file.pem"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy app') {
+            steps {
+                
+                 sh """ 
+                 kubectl apply -f ${REPO_DIR}/python_docker/python-redis.yaml
+                 kubectl apply -f ${REPO_DIR}/python_docker/redisdeploy.yaml
+                 kubectl apply -f ${REPO_DIR}/python_docker/python-redis-service.yaml
+                 kubectl apply -f ${REPO_DIR}/python_docker/redis-serv.yaml
+                 kubectl apply -f ${REPO_DIR}/python_docker/networkpolicy.yaml"""
+
+            }
+        }
+        
+
+    }
+}

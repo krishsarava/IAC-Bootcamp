@@ -1,0 +1,139 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO_DIR = "${WORKSPACE}"
+        TF_DIR = "${REPO_DIR}/jenkinsproject/terraform"
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_DEFAULT_REGION = 'us-east-2'
+    }
+
+    stages {
+        stage('Checkout Repository') {
+            steps {
+                git credentialsId: 'gitlab_connectivity', branch: 'H1', url: 'https://gitlab.stackroute.in/nw-jan-25/h1-sk-repo.git'
+            }
+        }
+
+        stage('Retrieve SSH Key') {
+            steps {
+                script {
+                    withCredentials([file(credentialsId: 'pv-key', variable: 'SECERET_FILE')]) {
+                        sh "cp ${SECERET_FILE} ${REPO_DIR}/secret-file.pem"
+                        sh "chmod 600 ${REPO_DIR}/secret-file.pem"
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                script {
+                    dir("${TF_DIR}") {
+                        sh "terraform init"
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                script {
+                    dir("${TF_DIR}") {
+                        sh "terraform plan"
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                script {
+                    dir("${TF_DIR}") {
+                        sh """terraform apply -var "key=${REPO_DIR}/secret-file.pem" -auto-approve"""
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Output') {
+            steps {
+                script {
+                    dir("${TF_DIR}") {
+                        sh "terraform output"
+                    }
+                }
+            }
+        }
+
+        stage('Capture Private IP') {
+            steps {
+                script {
+                    dir("${TF_DIR}") {
+                        privateIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
+                        echo "Private IP of the instance: ${privateIp}"
+                    }
+                }
+            }
+        }
+
+        stage('Delete Existing Worker Node') {
+            steps {
+                script {
+                    def workerName = 'ar-worker'
+                    def jenkinsMasterUrl = 'http://3.18.95.98:8009/'
+
+                    // Download Jenkins CLI
+                    sh "wget -q ${jenkinsMasterUrl}/jnlpJars/jenkins-cli.jar -O ${REPO_DIR}/jenkins-cli.jar"
+                    sh "chmod +x ${REPO_DIR}/jenkins-cli.jar"
+
+                    // Check if the worker node exists and delete if it does
+                    def nodeExists = sh(script: "java -jar ${REPO_DIR}/jenkins-cli.jar -s ${jenkinsMasterUrl} -auth admin:admin list-nodes | grep -w ${workerName} || true", returnStatus: true) == 0
+
+                    if (nodeExists) {
+                        echo "Node ${workerName} exists. Deleting it..."
+                        sh "java -jar ${REPO_DIR}/jenkins-cli.jar -s ${jenkinsMasterUrl} -auth admin:admin delete-node ${workerName} || true"
+                        echo "Node ${workerName} deleted successfully."
+                    } else {
+                        echo "Node ${workerName} does not exist. Skipping deletion."
+                    }
+                }
+            }
+        }
+
+        stage('Add Worker Node') {
+            steps {
+                script {
+                    def workerName = 'ar-worker'
+                    def workerIp = privateIp
+                    def jenkinsMasterUrl = 'http://3.18.95.98:8009/'
+                    def sshCredentialsId = 'aws_ssh_key'
+
+                    echo "Adding new worker node: ${workerName}"
+
+                    // Add the worker node
+                    sh """
+                    java -jar ${REPO_DIR}/jenkins-cli.jar -s ${jenkinsMasterUrl} -auth admin:admin create-node ${workerName} << EOF
+                    <slave>
+                        <name>${workerName}</name>
+                        <description>Automated worker node</description>
+                        <label>java</label>
+                        <remoteFS>/home/ubuntu/jenkins/agent</remoteFS>
+                        <numExecutors>2</numExecutors>
+                        <mode>NORMAL</mode>
+                        <launcher class="hudson.plugins.sshslaves.SSHLauncher">
+                            <host>${workerIp}</host>
+                            <port>22</port>
+                            <credentialsId>${sshCredentialsId}</credentialsId>
+                            <javaPath>/usr/bin/java</javaPath>
+                        </launcher>
+                    </slave>
+                    EOF
+                    """
+                    echo "Worker node ${workerName} added successfully."
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-redis-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: python-redis-pod
+  template:
+    metadata:
+      labels:
+        app: python-redis-pod
+    spec:
+      containers:
+        - name: python-redis-con
+          image: krishsarava/python_app:20250303
+          ports:
+            - containerPort: 8000  # The container is listening on this port

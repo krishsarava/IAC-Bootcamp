@@ -1,0 +1,15 @@
+
+---
+- name: Install argocd in local VM
+  hosts: localhost
+  gather_facts: no
+  become: true
+  tasks:
+    - name: Install argocd
+      shell: |
+        export VERSION=v2.14.3
+        wget https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64
+        chmod +x argocd-linux-amd64
+        sudo mv argocd-linux-amd64 /usr/local/bin/argocd
+      args:
+        creates: /usr/local/bin/argocd

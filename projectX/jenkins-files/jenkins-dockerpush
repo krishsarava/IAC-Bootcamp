@@ -1,0 +1,46 @@
+pipeline {
+     agent { label  'java'}
+      environment {
+     REPO_DIR = "${WORKSPACE}"
+     gitlab=credentials('gitlab_connectivity')
+     NGINX_IMAGE_NAME = "krishsarava/nginx_app"
+     PHP_IMAGE_NAME = "krishsarava/php_app"
+     POSTGRES_IMAGE_NAME = "krishsarava/postgres_app"
+     DOCKER_CREDENTIALS = credentials('docker_cred')
+    }
+    stages {
+        stage('Checkout Repository') {
+            steps {
+                // Checkout the repository containing both Terraform and Ansible files
+                 git credentialsId: 'gitlab_connectivity', branch: 'H1', url: 'https://gitlab.stackroute.in/nw-jan-25/h1-sk-repo.git'
+            }
+        }
+        stage('dockerbuild') {
+            steps {
+                // Checkout the repository containing both Terraform and Ansible files
+                 sh """cd ${REPO_DIR}/projectX/php_postgres/nginx && sudo docker build -t ${NGINX_IMAGE_NAME}:latest ."""
+                 sh """cd ${REPO_DIR}/projectX/php_postgres/php && sudo docker build -t ${PHP_IMAGE_NAME}:latest ."""
+                 sh """cd ${REPO_DIR}/projectX/php_postgres/postgresql && sudo docker build -t ${postgres_IMAGE_NAME}:latest ."""
+            }
+        }
+        stage('Login to Docker Registry') {
+            steps {
+                script {
+                    // Log in to Docker Hub or a private Docker registry
+                    sh 'echo ${DOCKER_CREDENTIALS_PSW} | sudo docker login -u ${DOCKER_CREDENTIALS_USR} --password-stdin'
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    // Push the Docker image to the Docker registry
+                    sh """sudo docker push ${NGINX_IMAGE_NAME}:latest """
+                    sh """sudo docker push ${PHP_IMAGE_NAME}:latest """
+                    sh """sudo docker push ${POSTGRES_IMAGE_NAME}:latest """
+
+                }
+            }
+        }
+    }
+}

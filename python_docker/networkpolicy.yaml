@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-fe-be
+spec:
+  podSelector:
+    matchLabels:
+      app: redis-pod
+      #release: stable
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: python-redis-pod
+      ports:
+        - protocol: TCP
+          port: 6379
+
+
+
+
+
+

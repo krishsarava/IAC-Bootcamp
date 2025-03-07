@@ -1,0 +1,7 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-redis
+  namespace: default  # Change if using a different namespace
+spec:
+  replicas: 5 

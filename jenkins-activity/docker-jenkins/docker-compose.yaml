@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: always
+    ports:
+      - "8009:8080"
+      - "50000:50000"
+    volumes:
+      - /home/ubuntu/jenkinsfast:/var/jenkins_home  # Mount workspace
+      - ./jenkins-entrypoint.sh:/usr/local/bin/jenkins-entrypoint.sh  # Mount custom entrypoint script
+    environment:
+      - JAVA_OPTS=-Xmx2048m  # Allocating 2GB memory for Jenkins
+    user: root  # Run as root to install packages
+    entrypoint: ["/bin/bash", "/usr/local/bin/jenkins-entrypoint.sh"]
+    deploy:
+      resources:
+        limits:
+          cpus: "2"       # Limit Jenkins to 2 CPU cores
+          memory: "4GB"   # Limit Jenkins to 4GB RAM
+        reservations:
+          cpus: "1"       # Reserve 1 CPU core
+          memory: "2GB"   # Reserve 2GB RAM

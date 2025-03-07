@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php-postgres-deploy
+spec:
+  replicas: {{ .Values.php.replicas }}
+  selector:
+    matchLabels:
+      app: php-pod
+  template:
+    metadata:
+      labels:
+        app: php-pod
+    spec:
+      containers:
+        - name: php-con
+          image: {{ .Values.php.image }}
+          ports:
+            - containerPort: 9000

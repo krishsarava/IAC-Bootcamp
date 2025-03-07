@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS votes (
+    id SERIAL PRIMARY KEY,
+    candidate VARCHAR(100) NOT NULL,
+    voter_ip VARCHAR(45),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

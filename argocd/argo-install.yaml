@@ -1,0 +1,37 @@
+---
+- name: Set up argo cd
+  hosts: localhost
+  tasks:
+    # creating a namespace
+        - name: Name space argocd
+          command:  kubectl create namespace argocd
+    # Adding Helm repo
+        - name: Adding Repo
+          shell: |
+                   helm repo add argo https://argoproj.github.io/argo-helm
+                    helm repo update
+    # Installing argocd
+        - name: installing from repo
+          command:  helm install argocd argo/argo-cd --namespace argocd --create-namespace
+    # patching Service
+        - name: Patching service
+          shell: |
+           kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
+        # - name: Get the ArgoCD initial password
+        #   kubernetes.core.k8s_info:
+        #     name: argocd-initial-admin-secret
+        #     namespace: argocd
+        #   register: argocd_secret
+        # - name: Show ArgoCD initial password
+        #   debug:
+        #     msg: "ArgoCD initial admin password is: {{ argocd_secret.resources[0].data.password | b64decode }}"
+                  
+        # - name: Install argocd cli
+        #   shell: |
+        #         curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/download/v2.7.4/argocd-linux-amd64
+        #         sudo mv argocd-linux-amd64 /usr/local/bin/argocd
+        #         sudo chmod +x /usr/local/bin/argocd
+
+
+
+

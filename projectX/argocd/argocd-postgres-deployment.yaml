@@ -1,0 +1,114 @@
+---
+- name: Set up ArgoCD
+  hosts: localhost
+  tasks:
+    - name: Ensure ArgoCD is fully initialized before fetching password
+      command: kubectl wait --for=condition=Available deployment -n argocd --timeout=120s argocd-server
+      register: argocd_ready
+      retries: 5
+      delay: 10
+      until: argocd_ready.rc == 0
+      ignore_errors: yes  # Allows playbook to continue even if this check fails
+
+    - name: Get ArgoCD admin password
+      shell: "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode"
+      register: argocd_admin_password
+      changed_when: false  # Prevents Ansible from marking this task as 'changed' unnecessarily
+
+    - name: Check if argocd_admin.ini exists
+      stat:
+        path: "./argocd_admin.ini"
+      register: ini_file_status
+
+    - name: Remove existing argocd_admin.ini file
+      file:
+        path: "./argocd_admin.ini"
+        state: absent
+      when: ini_file_status.stat.exists  # Only delete if the file exists
+
+    - name: Create new ArgoCD admin password file
+      lineinfile:
+        path: "./argocd_admin.ini"
+        line: "admin_password={{ argocd_admin_password.stdout }}"
+        create: yes
+        mode: '0600'
+
+    - name: Display ArgoCD admin password file location
+      debug:
+        msg: "ArgoCD admin password is stored in ./argocd_admin.ini"
+
+    - name: Check if argocd_private_ip.ini exists # for private IP address
+      stat:
+        path: "./private_ip.ini"
+      register: ini_file_status
+
+    # Private IP Address
+    - name: Get private IP of the master control plane node
+      shell: "kubectl get nodes -o wide | grep control-plane | awk '{print $6}'"
+      register: private_ip
+
+    - name: Remove existing private_ip.ini file
+      file:
+        path: "./private_ip.ini"
+        state: absent
+      when: ini_file_status.stat.exists  # Only delete if the file exists
+
+    - name: Create new ArgoCD private IP Address file
+      lineinfile:
+        path: "./private_ip.ini"
+        line: "private_ip={{ private_ip.stdout }}"
+        create: yes
+        mode: '0600'
+
+    - name: Display ArgoCD Private IP address file location
+      debug:
+        msg: "ArgoCD Private IP is stored in ./private_ip.ini"
+
+- name: Configure ArgoCD and Connect to GitLab via SSH
+  hosts: localhost
+  vars:
+    argocd_ip: "{{ hostvars['localhost'].private_ip.stdout }}"  # Use the private IP retrieved in the previous play
+    gitlab_repo: "git@gitlab.stackroute.in:nw-jan-25/h1-sk-repo.git"
+    argocd_branch: "H1"
+    gitlab_path: "projectX/helm-chart"
+    ssh_private_key_path: "{{ lookup('env', 'REPO_DIR') }}/secret-file.pem"  # Ensure REPO_DIR is defined
+    dest_namespace: "default"
+    app_name: "php-postgres-app"
+  tasks:
+    - name: Get ArgoCD server NodePort
+      shell: "kubectl get svc -n argocd argocd-server -o jsonpath='{.spec.ports[?(@.name==\"http\")].nodePort}'"
+      register: argocd_nodeport
+
+    - name: Get ArgoCD admin password
+      shell: "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d"
+      register: argocd_admin_password
+
+    - name: Disable strict host key checking for GitLab
+      lineinfile:
+        path: ~/.ssh/config
+        line: |
+          Host gitlab.stackroute.in
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+        create: yes
+        mode: '0600'
+
+    - name: Login to ArgoCD using static IP
+      shell: "argocd login --insecure --username admin --password {{ argocd_admin_password.stdout }} --grpc-web {{ argocd_ip }}:{{ argocd_nodeport.stdout }}"
+
+    - name: Connect ArgoCD to GitLab Repository via SSH
+      shell: "argocd repo add {{ gitlab_repo }} --ssh-private-key-path {{ ssh_private_key_path }} --insecure-skip-server-verification"
+
+    - name: Create an ArgoCD application
+      shell: "argocd app create {{ app_name }} --repo {{ gitlab_repo }} --revision {{ argocd_branch }} --path {{ gitlab_path }} --dest-server https://kubernetes.default.svc --dest-namespace {{ dest_namespace }}"
+
+    - name: Sync the ArgoCD application
+      shell: "argocd app sync {{ app_name }}"
+
+    - name: Display ArgoCD application status
+      shell: "argocd app get {{ app_name }}"
+      register: argocd_status
+
+    - name: Show ArgoCD application details
+      debug:
+        msg: "{{ argocd_status.stdout }}"

@@ -1,0 +1,50 @@
+---
+- name: Configure ArgoCD and Connect to GitLab via SSH
+  hosts: localhost
+  vars:
+    argocd_ip: "3.142.146.141"
+    gitlab_repo: "git@gitlab.stackroute.in:nw-jan-25/h1-sk-repo.git"
+    argocd_branch: "H1"
+    gitlab_path: "hackathon/H1-Ansible/helm-python"
+    ssh_private_key_path: "~/.ssh/id_rsa"
+    dest_namespace: "default"
+    
+    app_name: "my-app"
+  tasks:
+    - name: Get ArgoCD server NodePort
+      shell: "kubectl get svc -n argocd argocd-server -o jsonpath='{.spec.ports[?(@.name==\"http\")].nodePort}'"
+      register: argocd_nodeport
+
+    - name: Get ArgoCD admin password
+      shell: "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d"
+      register: argocd_admin_password
+
+    - name: Disable strict host key checking for GitLab
+      lineinfile:
+        path: ~/.ssh/config
+        line: |
+          Host gitlab.stackroute.in
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+        create: yes
+        mode: '0600'
+
+    - name: Login to ArgoCD using static IP
+      shell: "argocd login --insecure --username admin --password {{ argocd_admin_password.stdout }} --grpc-web {{ argocd_ip }}:{{ argocd_nodeport.stdout }}"
+
+    - name: Connect ArgoCD to GitLab Repository via SSH
+      shell: "argocd repo add {{ gitlab_repo }} --ssh-private-key-path {{ ssh_private_key_path }} --insecure-skip-server-verification"
+
+    - name: Create an ArgoCD application
+      shell: "argocd app create {{ app_name }} --repo {{ gitlab_repo }} --revision {{ argocd_branch }} --path {{ gitlab_path }} --dest-server https://kubernetes.default.svc --dest-namespace {{dest_namespace}}"
+
+    - name: Sync the ArgoCD application
+      shell: "argocd app sync {{ app_name }}"
+
+    - name: Display ArgoCD application status
+      shell: "argocd app get {{ app_name }}"
+      register: argocd_status
+
+    - name: Show ArgoCD application details
+      debug:
+        msg: "{{ argocd_status.stdout }}"

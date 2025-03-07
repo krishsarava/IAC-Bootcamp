@@ -1,0 +1,10 @@
+version: '3'
+services:
+  web:
+   image: stack01:v2
+   
+   ports:
+     - "8000:8000"
+  redis:
+   image: redis:alpine
+   

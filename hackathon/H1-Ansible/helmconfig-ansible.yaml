@@ -1,0 +1,16 @@
+---
+- name: Deploy the Helm chart
+  hosts: localhost
+  tasks:
+   - name: Deploy helm chart
+     kubernetes.core.helm:
+        name: python-redis
+        chart_ref: /home/ubuntu/hackathon/helm-python  # Change this to the actual path
+        release_namespace: "default"
+        kubeconfig: ~/.kube/config
+        # values:
+        #   replicaCount: 1
+        #   image:
+        #     repository: krishsarava/stack01
+        #     tag: "v2"
+        state: present

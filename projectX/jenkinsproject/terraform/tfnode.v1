@@ -1,0 +1,58 @@
+provider "aws" {
+  region  = "us-east-2"
+  profile = "default"
+}
+
+resource "aws_instance" "k8smaster" {
+  count    = 1
+  key_name = "15-key-sarava"
+
+  tags = {
+    Name  = "15-tf-jknode"
+    owner = "Saravanan Krishnan"
+  }
+
+  launch_template {
+    id      = "lt-05c810971e0111ae7"  # Ensure this ID is correct
+    version = "1"
+  }
+
+  #  SSH Connection Block (Must be inside aws_instance)
+  connection {
+    type        = "ssh"
+    user        = "ubuntu"  # Default AWS Ubuntu username
+    private_key = file("~/.ssh/id_rsa")  #  Update this path to your actual private key
+    host        = self.public_ip
+  }
+
+  #  Provisioner block
+  provisioner "remote-exec" {
+    inline = [
+      "echo 'Waiting for instance to stabilize...'",
+      "sleep 30",
+
+      "sudo apt-get update",
+      "sleep 10",
+
+      "sudo apt-get install -y git docker.io docker-compose ansible maven unzip curl gnupg software-properties-common",
+      "sleep 5",
+
+      # Install Terraform
+      "curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg",
+      "sleep 5",
+      
+      "echo 'Adding HashiCorp repo...'",
+      "echo 'deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main' | sudo tee /etc/apt/sources.list.d/hashicorp.list",
+      "sleep 5",
+
+      "sudo apt-get update && sudo apt-get install -y terraform",
+      "sleep 5",
+
+      # Enable Docker and add the user to the Docker group
+      "sudo systemctl enable --now docker",
+      "sudo usermod -aG docker ubuntu",
+
+      "echo 'Installation Complete!'"
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+---
+- name: Scale pods using kubectl
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Scale Deployment
+      command: kubectl scale deployment python-redis --replicas=5

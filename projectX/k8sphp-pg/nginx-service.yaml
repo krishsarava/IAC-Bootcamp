@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-ser
+spec:
+  type: NodePort  # Exposes the service externally
+  selector:
+    app: nginx-pod
+  ports:
+    - protocol: TCP
+      port: 80        # Service port that clients connect to
+      targetPort: 80  # Forward traffic to container's port
+      nodePort: 30100   # Optional: If not specified, Kubernetes will assign a random port (range 30000-32767) (edited) 

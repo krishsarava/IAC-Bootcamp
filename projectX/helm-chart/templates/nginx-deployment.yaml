@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+spec:
+  replicas: {{ .Values.nginx.replicas }}
+  selector:
+    matchLabels:
+      app: nginx-pod
+  template:
+    metadata:
+      labels:
+        app: nginx-pod
+    spec:
+      containers:
+        - name: nginx-con
+          image: {{ .Values.nginx.image }}
+          resources:
+            requests:
+              ephemeral-storage: "1Gi"   # Minimum storage required
+            limits:
+              ephemeral-storage: "2Gi"   # Maximum storage allowed
